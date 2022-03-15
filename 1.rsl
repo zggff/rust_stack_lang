@@ -1,0 +1,12 @@
+1 1
+loop
+    over
+    over
+    +
+    rot
+    dup 100 < if
+        break
+    end
+    put
+    print ", "
+end

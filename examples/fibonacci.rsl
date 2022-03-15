@@ -1,0 +1,13 @@
+// this is a test program printing fibonacci numbers up to 100
+1 1
+loop
+    over
+    over
+    +
+    rot
+    dup 100 < if
+        break
+    end
+    put
+    print ", "
+end
