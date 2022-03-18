@@ -2,9 +2,10 @@
 simple stack based language written in rust
 
 
-### Goals:
+## Goals:
 - [ ] interpreted
+- [ ] statically types
 - [ ] turing complete
 
-### Inspiration:
+## Inspiration:
 this project was inspired by [porth](https://gitlab.com/tsoding/porth)

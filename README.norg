@@ -1,0 +1,38 @@
+@document.meta
+    title: REAME
+    description: 
+    authors: maxgiga
+    categories: 
+    created: 2022-03-15
+    version: 0.0.11
+@end
+
+= TOC
+
+* Rust Stack Language
+ ** GOALS
+    - [ ] interpreted
+    - [ ] statically types
+    - [ ] turing complete
+
+ ** Inspiration
+        this project was inspired by [porth](https://gitlab.com/tsoding/porth)
+
+* Language design
+ ** syntax
+  *** list of language keywords:
+      - ControlFlow:
+        - if
+        - loop
+          - continue
+          - break
+        - fn
+      - Stack manipulation:
+        - dup
+        - swap
+        - over
+        - rot
+        - drop
+        
+
+
