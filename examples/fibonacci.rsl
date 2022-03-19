@@ -1,3 +1,18 @@
+fn print {
+    loop {
+        // duplicate the pointer to current char
+        dup 
+        // load byte from memory
+        load_byte 
+        dup 0 = if {
+            drop drop
+            break
+        }
+        putc
+        1 +
+    }
+}
+
 // takes two elements from the sequence
 fn fibonacci {
     loop {
@@ -8,11 +23,11 @@ fn fibonacci {
         dup 100 < if {
             break
         }
-        put
-        print ", "
+        putu
+        ", " print
     }
 }
 
-fn main{
+fn main {
     1 1 fibonacci
 }

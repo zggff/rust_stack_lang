@@ -1,0 +1,23 @@
+fn print {
+    loop {
+        // duplicate the pointer to current char
+        dup 
+        // load byte from memory
+        load_byte 
+         dup 0 = if {
+             drop drop
+             break
+         }
+         putc
+        1 +
+    }
+}
+
+fn main {
+    "Hello World!" 
+    print
+    10 putc 
+
+}
+
+

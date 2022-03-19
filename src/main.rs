@@ -6,30 +6,11 @@ enum MathOperator {
     Sub,
 }
 
-impl MathOperator {
-    fn apply(&self, a: isize, b: isize) -> isize {
-        match self {
-            MathOperator::Add => a + b,
-            MathOperator::Sub => a - b,
-        }
-    }
-}
-
 #[derive(Debug)]
 enum CmpOperator {
     Less,
     Greater,
     Equal,
-}
-
-impl CmpOperator {
-    fn apply(&self, a: isize, b: isize) -> bool {
-        match self {
-            CmpOperator::Less => a < b,
-            CmpOperator::Greater => a > b,
-            CmpOperator::Equal => a == b,
-        }
-    }
 }
 
 #[derive(Debug)]
@@ -41,33 +22,41 @@ enum StackOperation {
     Drop,
 }
 
-impl StackOperation {
-    fn apply(&self, stack: &mut Vec<isize>) {
-        match self {
-            Self::Dup => stack.push(*stack.last().unwrap()),
-            Self::Swap => {
-                let a = stack.pop().unwrap();
-                let b = stack.pop().unwrap();
-                stack.push(a);
-                stack.push(b);
-            }
-            Self::Over => {
-                let a = *stack.get(stack.len() - 2).unwrap();
-                stack.push(a);
-            }
-            Self::Rot => {
-                let a = stack.pop().unwrap();
-                let b = stack.pop().unwrap();
-                let c = stack.pop().unwrap();
-                stack.push(b);
-                stack.push(a);
-                stack.push(c);
-            }
-            Self::Drop => {
-                stack.pop();
-            }
-        }
-    }
+#[derive(Debug)]
+enum MemoryOperation {
+    StoreByte,
+    StoreBytes(Vec<u8>),
+    ChangeByte,
+    ChangeByes(Vec<u8>),
+    LoadByte,
+}
+
+#[derive(Debug)]
+enum Token {
+    Push(usize),           // push value onto stack
+    Math(MathOperator), // operations taking two values from the stack and pushing result of math operation onto stack
+    Cmp(CmpOperator),   // operations taking two values from the stack and pushing either 0 or 1
+    Stack(StackOperation), // operation operating directly on stack
+    Memory(MemoryOperation),
+    FunctionCall(String),
+
+    // TODO: review control flow for the language
+    If(Vec<Token>),   // if statement, consuming boolean value from stack
+    Loop(Vec<Token>), // infinite loop. To exit loop use break
+    Continue,
+    Break, // exit the loop
+
+    // TODO: this methods must be replaced by sane as soon as some type system is developed. This methods are absurd and only exist for the purpose of developing the basic language syntax
+    Putc, // prints the top of the stack
+    Putu,
+    Debug, // prints the whole stack
+}
+
+#[derive(Debug)]
+enum InterpretationStatus {
+    Break,
+    Continue,
+    None,
 }
 
 #[derive(Debug)]
@@ -80,59 +69,29 @@ impl Program {
     // This functions handles parsing top level of files, including imorts, function definitions and constants
     fn parse(code: &str) -> Self {
         let mut functions = HashMap::new();
-        let mut current_symbol = String::new();
-        let mut comment = false;
-        let mut current_symbol_end = false;
-        let mut code = code.chars();
-        while let Some(char) = code.next() {
-            if comment {
-                if char == '\n' || (char == '*' && code.next().unwrap() == '/') {
-                    comment = false;
-                    current_symbol_end = false;
-                }
-                continue;
-            }
-            match char {
-                ' ' | '\t' | '\n' => {
-                    current_symbol_end = true;
-                }
-                char => {
-                    current_symbol.push(char);
-                }
-            }
-
-            if current_symbol_end {
-                current_symbol_end = false;
-                match current_symbol.as_str() {
-                    "" => {}
-                    "//" | "/*" => comment = true,
-                    "/**/" => {}
-                    "fn" => {
-                        let mut function_name = String::new();
-                        let mut function_name_is_complete = false;
-                        while let Some(char) = code.next() {
-                            match char {
-                                ' ' if function_name.is_empty() => continue,
-                                ' ' => function_name_is_complete = true,
-                                '{' => {
-                                    let function = Self::parse_code_segment(&mut code, &functions);
-                                    functions.insert(function_name, function);
-                                    break;
-                                }
-                                _char if function_name_is_complete => {
-                                    panic!("fn declaration expects only a name. {}", _char)
-                                }
-                                char => function_name.push(char),
-                            }
+        let mut code = &mut code.chars();
+        while let Some(token) = next_token(code) {
+            match token.as_str() {
+                "fn" => {
+                    let function_name = next_token(code).unwrap();
+                    match next_token(code).as_deref() {
+                        Some("{") => {
+                            let function = Self::parse_code_segment(&mut code, &functions);
+                            functions.insert(function_name, function);
+                        }
+                        Some(token) => {
+                            panic!("unsupported symbol: {}", token);
+                        }
+                        None => {
+                            panic!("unexpected end of file");
                         }
                     }
+                }
 
-                    symbol => {
-                        panic!("umrecognised symbol on top level of program: {}; Expected one of the following values: [fn]", symbol)
-                    }
-                };
-                current_symbol.clear();
-            }
+                symbol => {
+                    panic!("umrecognised symbol on top level of program: {}; Expected one of the following values: [fn]", symbol)
+                }
+            };
         }
 
         Self { functions }
@@ -144,116 +103,70 @@ impl Program {
         functions: &HashMap<String, Vec<Token>>,
     ) -> Vec<Token> {
         let mut tokens = Vec::new();
-        let mut current_symbol = String::new();
-        let mut comment = false;
-        let mut current_symbol_end = false;
-        while let Some(char) = code.next() {
-            if comment {
-                if char == '\n' || (char == '*' && code.next().unwrap() == '/') {
-                    comment = false;
-                    current_symbol_end = false;
-                }
-                continue;
-            }
-            match char {
-                ' ' | '\t' | '\n' => {
-                    current_symbol_end = true;
-                }
-                char => {
-                    current_symbol.push(char);
-                }
-            }
-            if current_symbol_end {
-                current_symbol_end = false;
-                match current_symbol.as_str() {
-                    "" => {}
+        while let Some(token) = next_token(code) {
+            match token.as_str() {
+                // math operations
+                "+" => tokens.push(Token::Math(MathOperator::Add)),
+                "-" => tokens.push(Token::Math(MathOperator::Sub)),
 
-                    // math operations
-                    "+" => tokens.push(Token::Math(MathOperator::Add)),
-                    "-" => tokens.push(Token::Math(MathOperator::Sub)),
+                // boolean operations
+                "<" => tokens.push(Token::Cmp(CmpOperator::Less)),
+                ">" => tokens.push(Token::Cmp(CmpOperator::Greater)),
+                "=" => tokens.push(Token::Cmp(CmpOperator::Equal)),
 
-                    // boolean operations
-                    "<" => tokens.push(Token::Cmp(CmpOperator::Less)),
-                    ">" => tokens.push(Token::Cmp(CmpOperator::Greater)),
-                    "=" => tokens.push(Token::Cmp(CmpOperator::Equal)),
+                // stack operations
+                "dup" => tokens.push(Token::Stack(StackOperation::Dup)),
+                "swap" => tokens.push(Token::Stack(StackOperation::Swap)),
+                "over" => tokens.push(Token::Stack(StackOperation::Over)),
+                "rot" => tokens.push(Token::Stack(StackOperation::Rot)),
+                "drop" => tokens.push(Token::Stack(StackOperation::Drop)),
 
-                    // stack operations
-                    "dup" => tokens.push(Token::Stack(StackOperation::Dup)),
-                    "swap" => tokens.push(Token::Stack(StackOperation::Swap)),
-                    "over" => tokens.push(Token::Stack(StackOperation::Over)),
-                    "rot" => tokens.push(Token::Stack(StackOperation::Rot)),
-                    "drop" => tokens.push(Token::Stack(StackOperation::Drop)),
-
-                    // control flow operations
-                    "break" => tokens.push(Token::Break),
-                    "continue" => tokens.push(Token::Continue),
-                    "}" => return tokens,
-                    "loop" => {
-                        while let Some(char) = code.next() {
-                            match char {
-                                ' ' => {}
-                                '{' => {
-                                    tokens.push(Token::Loop(Self::parse_code_segment(
-                                        code, functions,
-                                    )));
-                                    break;
-                                }
-                                char => {
-                                    panic!("unsupported symbol: {}", char);
-                                }
-                            }
-                        }
+                // control flow operations
+                "break" => tokens.push(Token::Break),
+                "continue" => tokens.push(Token::Continue),
+                "}" => return tokens,
+                "loop" => match next_token(code).as_deref() {
+                    Some("{") => {
+                        tokens.push(Token::Loop(Self::parse_code_segment(code, functions)));
                     }
-                    "if" => {
-                        while let Some(char) = code.next() {
-                            match char {
-                                ' ' => {}
-                                '{' => {
-                                    tokens
-                                        .push(Token::If(Self::parse_code_segment(code, functions)));
-                                    break;
-                                }
-                                char => {
-                                    panic!("unsupported symbol: {}", char);
-                                }
-                            }
-                        }
+                    Some(token) => {
+                        panic!("unsupported symbol: {}", token);
                     }
-
-                    // general fuctions
-                    "print" => {
-                        let mut quotes_count = 0;
-                        let mut string_literal = String::new();
-                        for char in code.by_ref() {
-                            if char == '"' {
-                                quotes_count += 1;
-                            } else if quotes_count >= 2 {
-                                break;
-                            } else {
-                                string_literal.push(char);
-                            }
-                        }
-                        dbg!(&string_literal);
-                        tokens.push(Token::Print(string_literal))
+                    None => {
+                        panic!("unexpected end of file");
                     }
-                    "put" => tokens.push(Token::Put),
-                    "dbg" => tokens.push(Token::Debug),
+                },
+                "if" => match next_token(code).as_deref() {
+                    Some("{") => {
+                        tokens.push(Token::If(Self::parse_code_segment(code, functions)));
+                    }
+                    Some(token) => {
+                        panic!("unsupported symbol: {}", token);
+                    }
+                    None => {
+                        panic!("unexpected end of file");
+                    }
+                },
 
-                    // comments
-                    "//" | "/*" => comment = true,
-                    "/**/" => {}
+                // TODO: replace this with proper output after access to memory and arrays are added to the language
+                "putc" => tokens.push(Token::Putc),
+                "putu" => tokens.push(Token::Putu),
+                "dbg" => tokens.push(Token::Debug),
+                "load_byte" => tokens.push(Token::Memory(MemoryOperation::LoadByte)),
 
-                    symbol => {
-                        if let Ok(value) = symbol.parse::<isize>() {
-                            tokens.push(Token::Push(value));
-                        } else if let Some(_function) = functions.get(symbol) {
-                            tokens.push(Token::FunctionCall(symbol.to_string()));
-                        } else {
-                            panic!("Unknown symbol: {}", symbol);
-                        }
+                token => {
+                    if token.starts_with('"') && token.ends_with('"') {
+                        let mut data = token[1..token.len() - 1].as_bytes().to_vec();
+                        data.push(0);
+                        tokens.push(Token::Memory(MemoryOperation::StoreBytes(data)));
+                    } else if let Ok(value) = token.parse::<usize>() {
+                        tokens.push(Token::Push(value));
+                    } else if let Some(_function) = functions.get(token) {
+                        tokens.push(Token::FunctionCall(token.to_string()));
+                    } else {
+                        panic!("Unknown token: {}", token);
                     }
                 }
-                current_symbol.clear();
             }
         }
         tokens
@@ -267,6 +180,7 @@ impl Program {
         self.interpret_segment(
             main,
             &mut Vec::with_capacity(1000),
+            &mut Vec::with_capacity(1000),
             &mut InterpretationStatus::None,
         )
     }
@@ -274,7 +188,8 @@ impl Program {
     fn interpret_segment(
         &self,
         segment: &[Token],
-        stack: &mut Vec<isize>,
+        stack: &mut Vec<usize>,
+        memory: &mut Vec<u8>,
         status: &mut InterpretationStatus,
     ) {
         for token in segment {
@@ -285,44 +200,88 @@ impl Program {
                 Token::Math(operand) => {
                     let a = stack.pop().unwrap();
                     let b = stack.pop().unwrap();
-                    stack.push(operand.apply(a, b));
+                    let result = match operand {
+                        MathOperator::Add => a + b,
+                        MathOperator::Sub => a - b,
+                    };
+                    stack.push(result);
                 }
                 Token::Cmp(operand) => {
                     let a = stack.pop().unwrap();
                     let b = stack.pop().unwrap();
-                    stack.push(operand.apply(a, b) as isize);
+                    let result = match operand {
+                        CmpOperator::Less => a < b,
+                        CmpOperator::Greater => a > b,
+                        CmpOperator::Equal => a == b,
+                    };
+                    stack.push(result as usize);
                 }
-                Token::Stack(operand) => {
-                    operand.apply(stack);
-                }
-                Token::Print(value) => {
-                    print!("{}", value);
+                Token::Stack(operand) => match operand {
+                    StackOperation::Dup => stack.push(*stack.last().unwrap()),
+                    StackOperation::Swap => {
+                        let a = stack.pop().unwrap();
+                        let b = stack.pop().unwrap();
+                        stack.push(a);
+                        stack.push(b);
+                    }
+                    StackOperation::Over => {
+                        let a = *stack.get(stack.len() - 2).unwrap();
+                        stack.push(a);
+                    }
+                    StackOperation::Rot => {
+                        let a = stack.pop().unwrap();
+                        let b = stack.pop().unwrap();
+                        let c = stack.pop().unwrap();
+                        stack.push(b);
+                        stack.push(a);
+                        stack.push(c);
+                    }
+                    StackOperation::Drop => {
+                        stack.pop();
+                    }
+                },
+                Token::Memory(operand) => match operand {
+                    MemoryOperation::StoreBytes(data) => {
+                        let address = memory.len();
+                        memory.extend(data);
+                        stack.push(address);
+                    }
+                    MemoryOperation::LoadByte => {
+                        let address = stack.pop().unwrap();
+                        let value = memory.get(address).unwrap();
+                        stack.push(*value as usize);
+                    }
+                    _ => {}
+                },
+                Token::Putc => {
+                    print!("{}", char::from_u32(stack.pop().unwrap() as u32).unwrap());
                     std::io::stdout().flush().unwrap();
                 }
-                Token::Put => {
+                Token::Putu => {
                     print!("{}", stack.pop().unwrap());
                     std::io::stdout().flush().unwrap();
                 }
                 Token::Debug => {
-                    println!("{:?}", stack);
+                    println!("{:?} {:?}", stack, memory);
                 }
-                Token::If(subprogram) => {
+                Token::If(segment) => {
                     if stack.pop().unwrap() != 0 {
-                        interpret(subprogram, stack, status);
+                        self.interpret_segment(segment, stack, memory, status);
                         match status {
                             InterpretationStatus::None => {}
                             _ => return,
                         }
                     }
                 }
-                Token::Loop(subprogram) => loop {
-                    interpret(subprogram, stack, status);
+                Token::Loop(segment) => loop {
+                    self.interpret_segment(segment, stack, memory, status);
                     match status {
                         InterpretationStatus::Continue => {
                             *status = InterpretationStatus::None;
                             continue;
                         }
                         InterpretationStatus::Break => {
+                            *status = InterpretationStatus::None;
                             break;
                         }
                         _ => {}
@@ -343,6 +302,7 @@ impl Program {
                         .get(function)
                         .expect("no function with this name found"),
                     stack,
+                    memory,
                     status,
                 ),
 
@@ -355,104 +315,62 @@ impl Program {
     }
 }
 
-#[derive(Debug)]
-enum Token {
-    Push(isize),           // push value onto stack
-    Math(MathOperator), // operations taking two values from the stack and pushing result of math operation onto stack
-    Cmp(CmpOperator),   // operations taking two values from the stack and pushing either 0 or 1
-    Stack(StackOperation), // operation operating directly on stack
-    FunctionCall(String),
+fn next_token(chars: &mut impl Iterator<Item = char>) -> Option<String> {
+    let mut accumulator = String::new();
+    let mut last_char = ' ';
+    let mut is_comment = false;
+    let separators = vec![' ', '\n', '\t'];
 
-    // TODO: review control flow for the language
-    If(Vec<Token>),   // if statement, consuming boolean value from stack
-    Loop(Vec<Token>), // infinite loop. To exit loop use break
-    Continue,
-    Break, // exit the loop
-
-    // TODO: this methods must be replaced by sane as soon as some type system is developed. This methods are absurd and only exist for the purpose of developing the basic language syntax
-    Put,           // prints the top of the stack
-    Print(String), // prints string literal
-    Debug,         // prints the whole stack
-}
-
-#[derive(Debug)]
-enum InterpretationStatus {
-    Exit,
-    Break,
-    Continue,
-    None,
-}
-
-fn interpret(tokens: &[Token], stack: &mut Vec<isize>, status: &mut InterpretationStatus) {
-    for token in tokens {
-        match token {
-            Token::Push(value) => {
-                stack.push(*value);
+    while let Some(char) = chars.next() {
+        match char {
+            '\n' if is_comment => is_comment = false,
+            // this allows not to check for comments in the parsing function, as it consumes the iterator until the next buffer
+            '/' if last_char == '/' => {
+                accumulator.pop();
+                is_comment = true
             }
-            Token::Math(operand) => {
-                let a = stack.pop().unwrap();
-                let b = stack.pop().unwrap();
-                stack.push(operand.apply(a, b));
-            }
-            Token::Cmp(operand) => {
-                let a = stack.pop().unwrap();
-                let b = stack.pop().unwrap();
-                stack.push(operand.apply(a, b) as isize);
-            }
-            Token::Stack(operand) => {
-                operand.apply(stack);
-            }
-            Token::Print(value) => {
-                print!("{}", value);
-                std::io::stdout().flush().unwrap();
-            }
-            Token::Put => {
-                print!("{}", stack.pop().unwrap());
-                std::io::stdout().flush().unwrap();
-            }
-            Token::Debug => {
-                println!("{:?}", stack);
-            }
-            Token::If(subprogram) => {
-                if stack.pop().unwrap() != 0 {
-                    interpret(subprogram, stack, status);
-                    match status {
-                        InterpretationStatus::None => {}
-                        _ => return,
+            '"' if !is_comment => {
+                accumulator.push('"');
+                for char in chars.by_ref() {
+                    accumulator.push(char);
+                    if char == '"' {
+                        return Some(accumulator);
                     }
                 }
             }
-            Token::Loop(subprogram) => loop {
-                interpret(subprogram, stack, status);
-                match status {
-                    InterpretationStatus::Continue => {
-                        *status = InterpretationStatus::None;
-                        continue;
-                    }
-                    InterpretationStatus::Break => {
-                        break;
-                    }
-                    _ => {}
+            // WARNING: current next_token fails to parse code like: "fn main{}"; whitespace is required
+            char if separators.contains(&char) => {
+                if !is_comment && !accumulator.is_empty() {
+                    return Some(accumulator);
                 }
-            },
-            Token::Break => {
-                *status = InterpretationStatus::Break;
-                return;
             }
 
-            Token::Continue => {
-                *status = InterpretationStatus::Continue;
-                return;
+            char if !is_comment => {
+                last_char = char;
+                accumulator.push(char)
             }
-
-            Token::FunctionCall(funtion) => {}
-
-            // TODO:remove this unreachable arm after most tokens are filled int
-            token => {
-                unimplemented!("{:?}", token)
-            }
+            _ => {}
         }
     }
+    None
+}
+
+#[test]
+fn test_next_token() {
+    let string = r#"
+        //test
+        fn main {
+            hello
+            "test string"
+        }
+    "#;
+    let chars = &mut string.chars();
+    assert_eq!(next_token(chars), Some(String::from("fn")));
+    assert_eq!(next_token(chars), Some(String::from("main")));
+    assert_eq!(next_token(chars), Some(String::from("{")));
+    assert_eq!(next_token(chars), Some(String::from("hello")));
+    assert_eq!(next_token(chars), Some(String::from("}")));
+    assert_eq!(next_token(chars), None);
 }
 
 fn main() {
@@ -463,12 +381,6 @@ fn main() {
     )
     .unwrap();
     let program = Program::parse(&program_source);
-    dbg!(&program);
     program.interpret();
-    // interpret(
-    // program.functions.get("main").unwrap(),
-    // &mut Vec::with_capacity(1000),
-    // &mut InterpretationStatus::None,
-    // );
     println!()
 }
