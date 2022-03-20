@@ -1,11 +1,15 @@
+// consumes the pointer to the start of the string
+// return the number of bytes written
 fn print {
+    dup
     loop {
         // duplicate the pointer to current char
         dup 
         // load byte from memory
         load_byte 
         dup 0 = if {
-            drop drop
+            drop
+            1 + -
             break
         }
         putc
@@ -13,7 +17,7 @@ fn print {
     }
 }
 
-// takes two elements from the sequence
+// takes two elements to start the sequence
 fn fibonacci {
     loop {
         over
@@ -21,13 +25,18 @@ fn fibonacci {
         +
         rot
         dup 100 < if {
+            drop drop drop
             break
         }
         putu
-        ", " print
+        ", " dup print clear
+        
     }
 }
 
 fn main {
     1 1 fibonacci
+    10 putc 
+    ??? // debug stack and memory
 }
+

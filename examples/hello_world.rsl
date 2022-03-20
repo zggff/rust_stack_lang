@@ -1,23 +1,25 @@
+// consumes the pointer to the start of the string
+// return the number of bytes written
 fn print {
+    dup
     loop {
         // duplicate the pointer to current char
         dup 
         // load byte from memory
         load_byte 
-         dup 0 = if {
-             drop drop
-             break
-         }
-         putc
+        dup 0 = if {
+            drop
+            1 + -
+            break
+        }
+        putc
         1 +
     }
 }
 
 fn main {
-    "Hello World!" 
-    print
+    "Hello World!" dup print clear
     10 putc 
-
+    ??? // debug stack and memory
 }
-
 
