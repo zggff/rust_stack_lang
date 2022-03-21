@@ -1,3 +1,6 @@
+use crate::io::Io;
+
+mod io;
 mod program;
 mod token;
 
@@ -10,6 +13,6 @@ fn main() {
     .unwrap();
     let program = program::Program::parse(&program_source);
 
-    program.interpret();
+    program.interpret(&mut Io::default());
     println!()
 }

@@ -1,3 +1,4 @@
+use crate::io::Io;
 use crate::token::*;
 use std::{collections::HashMap, io::Write};
 
@@ -17,7 +18,6 @@ pub struct Program {
 }
 
 impl Program {
-    // This functions handles parsing top level of files, including imorts, function definitions and constants
     pub fn parse(code: &str) -> Self {
         let mut functions = HashMap::new();
         let mut code = &mut code.chars();
@@ -145,7 +145,7 @@ impl Program {
         tokens
     }
 
-    pub fn interpret(&self) {
+    pub fn interpret<W: Write>(&self, io: &mut Io<W>) {
         let main = self
             .functions
             .get("main")
@@ -156,16 +156,18 @@ impl Program {
             &mut Memory::new(),
             &HashMap::new(),
             &mut InterpretationStatus::None,
+            io,
         )
     }
 
-    fn interpret_segment(
+    fn interpret_segment<W: Write>(
         &self,
         segment: &[Token],
         stack: &mut Vec<usize>,
         memory: &mut Memory,
         variables: &HashMap<String, usize>,
         status: &mut InterpretationStatus,
+        io: &mut Io<W>,
     ) {
         for token in segment {
             match token {
@@ -233,19 +235,24 @@ impl Program {
                     _ => {}
                 },
                 Token::Putc => {
-                    print!("{}", char::from_u32(stack.pop().unwrap() as u32).unwrap());
-                    std::io::stdout().flush().unwrap();
+                    write!(
+                        io,
+                        "{}",
+                        char::from_u32(stack.pop().unwrap() as u32).unwrap()
+                    )
+                    .unwrap();
+                    io.flush().unwrap();
                 }
                 Token::Putu => {
-                    print!("{}", stack.pop().unwrap());
+                    write!(io, "{}", stack.pop().unwrap()).unwrap();
                     std::io::stdout().flush().unwrap();
                 }
                 Token::Debug => {
-                    println!("{:?} {:?}", stack, memory);
+                    writeln!(io, "{:?} {:?}", stack, memory).unwrap();
                 }
                 Token::IfBlock(segment) => {
                     if stack.pop().unwrap() != 0 {
-                        self.interpret_segment(segment, stack, memory, variables, status);
+                        self.interpret_segment(segment, stack, memory, variables, status, io);
                         match status {
                             InterpretationStatus::None => {}
                             _ => return,
@@ -253,7 +260,7 @@ impl Program {
                     }
                 }
                 Token::LoopBlock(segment) => loop {
-                    self.interpret_segment(segment, stack, memory, variables, status);
+                    self.interpret_segment(segment, stack, memory, variables, status, io);
                     match status {
                         InterpretationStatus::Continue => {
                             *status = InterpretationStatus::None;
@@ -284,13 +291,14 @@ impl Program {
                     memory,
                     variables,
                     status,
+                    io,
                 ),
                 Token::LetBlock(segment, let_bindings) => {
                     let mut new_variables = variables.clone();
                     for let_binding in let_bindings {
                         new_variables.insert(let_binding.clone(), stack.pop().unwrap());
                     }
-                    self.interpret_segment(segment, stack, memory, &new_variables, status);
+                    self.interpret_segment(segment, stack, memory, &new_variables, status, io);
                     match status {
                         InterpretationStatus::None => {}
                         _ => return,
@@ -367,4 +375,27 @@ fn test_next_token() {
     assert_eq!(next_token(chars), Some(String::from("\"test string\"")));
     assert_eq!(next_token(chars), Some(String::from("}")));
     assert_eq!(next_token(chars), None);
+}
+
+macro_rules! test_program_output {
+    ($code: expr, $output: expr) => {{
+        let program = Program::parse($code);
+        let mut writer = vec![];
+        let mut io = Io::new(&mut writer);
+        program.interpret(&mut io);
+        assert_eq!(writer, $output);
+    }};
+}
+
+#[test]
+fn test_interpreter() {
+    test_program_output!(
+        r#"
+        fn main {
+            69 putu
+            10 putc
+        }
+        "#,
+        "69\n".as_bytes()
+    );
 }
