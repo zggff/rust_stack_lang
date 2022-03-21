@@ -1,6 +1,6 @@
 use crate::io::Io;
 use crate::token::*;
-use std::{collections::HashMap, io::Write};
+use std::{collections::HashMap, io::Write, iter::Peekable};
 
 mod memory;
 use memory::Memory;
@@ -20,18 +20,18 @@ pub struct Program {
 impl Program {
     pub fn parse(code: &str) -> Self {
         let mut functions = HashMap::new();
-        let mut code = &mut code.chars();
-        while let Some(token) = next_token(code) {
+        let mut code = Tokens::new(code).peekable();
+        while let Some(token) = code.next() {
             match token.as_str() {
                 "fn" => {
-                    let function_name = next_token(code).unwrap();
-                    match next_token(code).as_deref() {
+                    let function_name = code.next().unwrap();
+                    match code.next().as_deref() {
                         Some("{") => {
                             let function = Self::parse_code_segment(&mut code, &functions, &vec![]);
                             functions.insert(function_name, function);
                         }
                         Some(token) => {
-                            panic!("unsupported symbol: {}", token);
+                            panic!("unsupported symbol: {}, '{{' expected", token);
                         }
                         None => {
                             panic!("unexpected end of file");
@@ -50,12 +50,12 @@ impl Program {
 
     // this function handles the parsing of funtion bodies
     fn parse_code_segment(
-        code: &mut impl Iterator<Item = char>,
+        code: &mut Peekable<Tokens>,
         functions: &HashMap<String, Vec<Token>>,
         lets: &Vec<String>,
     ) -> Vec<Token> {
         let mut tokens = Vec::new();
-        while let Some(token) = next_token(code) {
+        while let Some(token) = code.next() {
             match token.as_str() {
                 // math operations
                 "+" => tokens.push(Token::Math(MathOperator::Add)),
@@ -77,27 +77,39 @@ impl Program {
                 "break" => tokens.push(Token::Break),
                 "continue" => tokens.push(Token::Continue),
                 "}" => return tokens,
-                "loop" => match next_token(code).as_deref() {
+                "loop" => match code.next().as_deref() {
                     Some("{") => {
                         tokens.push(Token::LoopBlock(Self::parse_code_segment(
                             code, functions, lets,
                         )));
                     }
                     Some(token) => {
-                        panic!("unsupported symbol: {}", token);
+                        panic!("unsupported symbol: {}, '{{' expected", token);
                     }
                     None => {
                         panic!("unexpected end of file");
                     }
                 },
-                "if" => match next_token(code).as_deref() {
+                "if" => match code.next().as_deref() {
                     Some("{") => {
-                        tokens.push(Token::IfBlock(Self::parse_code_segment(
-                            code, functions, lets,
-                        )));
+                        let true_block = Self::parse_code_segment(code, functions, lets);
+                        let false_block = if code.next_if(|token| token == "else").is_some() {
+                            match code.next().as_deref() {
+                                Some("{") => Self::parse_code_segment(code, functions, lets),
+                                Some(token) => {
+                                    panic!("unsupported symbol: {}, '{{' expected", token);
+                                }
+                                None => {
+                                    panic!("unexpected end of file");
+                                }
+                            }
+                        } else {
+                            vec![]
+                        };
+                        tokens.push(Token::IfBlock(true_block, false_block));
                     }
                     Some(token) => {
-                        panic!("unsupported symbol: {}", token);
+                        panic!("unsupported symbol: {}, '{{' expected", token);
                     }
                     None => {
                         panic!("unexpected end of file");
@@ -112,7 +124,7 @@ impl Program {
                 "free" => tokens.push(Token::Memory(MemoryOperation::Free)),
                 "let" => {
                     let mut new_lets = lets.clone();
-                    while let Some(token) = next_token(code) {
+                    while let Some(token) = code.next() {
                         if token == "{" {
                             tokens.push(Token::LetBlock(
                                 Self::parse_code_segment(code, functions, &new_lets),
@@ -250,13 +262,16 @@ impl Program {
                 Token::Debug => {
                     writeln!(io, "{:?} {:?}", stack, memory).unwrap();
                 }
-                Token::IfBlock(segment) => {
-                    if stack.pop().unwrap() != 0 {
-                        self.interpret_segment(segment, stack, memory, variables, status, io);
-                        match status {
-                            InterpretationStatus::None => {}
-                            _ => return,
-                        }
+                Token::IfBlock(true_block, false_block) => {
+                    let segment = if stack.pop().unwrap() != 0 {
+                        true_block
+                    } else {
+                        false_block
+                    };
+                    self.interpret_segment(segment, stack, memory, variables, status, io);
+                    match status {
+                        InterpretationStatus::None => {}
+                        _ => return,
                     }
                 }
                 Token::LoopBlock(segment) => loop {
@@ -318,6 +333,60 @@ impl Program {
     }
 }
 
+struct Tokens<'a> {
+    code: std::str::Chars<'a>,
+}
+
+impl<'a> Tokens<'a> {
+    pub fn new(code: &'a str) -> Self {
+        Tokens { code: code.chars() }
+    }
+}
+
+impl<'a> Iterator for Tokens<'a> {
+    type Item = String;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let mut accumulator = String::new();
+        let mut last_char = ' ';
+        let mut is_comment = false;
+        let separators = vec![' ', '\n', '\t'];
+
+        while let Some(char) = self.code.next() {
+            match char {
+                '\n' if is_comment => is_comment = false,
+                // this allows not to check for comments in the parsing function, as it consumes the iterator until the next buffer
+                '/' if last_char == '/' => {
+                    accumulator.pop();
+                    is_comment = true
+                }
+                '"' if !is_comment => {
+                    accumulator.push('"');
+                    for char in self.code.by_ref() {
+                        accumulator.push(char);
+                        if char == '"' {
+                            return Some(accumulator);
+                        }
+                    }
+                }
+                // WARNING: current next_token fails to parse code like: "fn main{}"; whitespace is required
+                char if separators.contains(&char) => {
+                    if !is_comment && !accumulator.is_empty() {
+                        return Some(accumulator);
+                    }
+                }
+
+                char if !is_comment => {
+                    last_char = char;
+                    accumulator.push(char)
+                }
+                _ => {}
+            }
+        }
+        None
+    }
+}
+
 fn next_token(chars: &mut impl Iterator<Item = char>) -> Option<String> {
     let mut accumulator = String::new();
     let mut last_char = ' ';
@@ -367,14 +436,14 @@ fn test_next_token() {
             "test string"
         }
     "#;
-    let chars = &mut string.chars();
-    assert_eq!(next_token(chars), Some(String::from("fn")));
-    assert_eq!(next_token(chars), Some(String::from("main")));
-    assert_eq!(next_token(chars), Some(String::from("{")));
-    assert_eq!(next_token(chars), Some(String::from("hello")));
-    assert_eq!(next_token(chars), Some(String::from("\"test string\"")));
-    assert_eq!(next_token(chars), Some(String::from("}")));
-    assert_eq!(next_token(chars), None);
+    let code = &mut Tokens::new(string);
+    assert_eq!(code.next(), Some(String::from("fn")));
+    assert_eq!(code.next(), Some(String::from("main")));
+    assert_eq!(code.next(), Some(String::from("{")));
+    assert_eq!(code.next(), Some(String::from("hello")));
+    assert_eq!(code.next(), Some(String::from("\"test string\"")));
+    assert_eq!(code.next(), Some(String::from("}")));
+    assert_eq!(code.next(), None);
 }
 
 macro_rules! test_program_output {

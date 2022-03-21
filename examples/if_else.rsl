@@ -1,0 +1,12 @@
+fn main {
+    4 5
+    let a b {
+        a b > if {
+            62 putc 
+        } else {
+            60 putc
+            61 putc
+        }
+       
+    }
+}

@@ -39,8 +39,8 @@ pub enum Token {
     FunctionCall(String),
 
     // TODO: review control flow for the language
-    IfBlock(Vec<Token>),   // if statement, consuming boolean value from stack
-    LoopBlock(Vec<Token>), // infinite loop. To exit loop use break
+    IfBlock(Vec<Token>, Vec<Token>), // if statement, consuming boolean value from stack
+    LoopBlock(Vec<Token>),           // infinite loop. To exit loop use break
     Continue,
     Break,                             // exit the loop
     LetBlock(Vec<Token>, Vec<String>), // scope for the let bindings,
