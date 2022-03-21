@@ -1,6 +1,5 @@
 mod program;
-mod tokens;
-use program::Program;
+mod token;
 
 fn main() {
     let program_source = std::fs::read_to_string(
@@ -9,7 +8,8 @@ fn main() {
             .unwrap_or_else(|| String::from("1.rsl")),
     )
     .unwrap();
-    let program = Program::parse(&program_source);
+    let program = program::Program::parse(&program_source);
+
     program.interpret();
     println!()
 }

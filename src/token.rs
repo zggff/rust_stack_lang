@@ -39,10 +39,12 @@ pub enum Token {
     FunctionCall(String),
 
     // TODO: review control flow for the language
-    If(Vec<Token>),   // if statement, consuming boolean value from stack
-    Loop(Vec<Token>), // infinite loop. To exit loop use break
+    IfBlock(Vec<Token>),   // if statement, consuming boolean value from stack
+    LoopBlock(Vec<Token>), // infinite loop. To exit loop use break
     Continue,
-    Break, // exit the loop
+    Break,                             // exit the loop
+    LetBlock(Vec<Token>, Vec<String>), // scope for the let bindings,
+    Let(String),                       // get let binding
 
     // TODO: this methods must be replaced by sane as soon as some type system is developed. This methods are absurd and only exist for the purpose of developing the basic language syntax
     Putc, // prints the top of the stack

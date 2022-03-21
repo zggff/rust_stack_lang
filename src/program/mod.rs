@@ -1,4 +1,4 @@
-use crate::tokens::*;
+use crate::token::*;
 use std::{collections::HashMap, io::Write};
 
 mod memory;
@@ -27,7 +27,7 @@ impl Program {
                     let function_name = next_token(code).unwrap();
                     match next_token(code).as_deref() {
                         Some("{") => {
-                            let function = Self::parse_code_segment(&mut code, &functions);
+                            let function = Self::parse_code_segment(&mut code, &functions, &vec![]);
                             functions.insert(function_name, function);
                         }
                         Some(token) => {
@@ -52,6 +52,7 @@ impl Program {
     fn parse_code_segment(
         code: &mut impl Iterator<Item = char>,
         functions: &HashMap<String, Vec<Token>>,
+        lets: &Vec<String>,
     ) -> Vec<Token> {
         let mut tokens = Vec::new();
         while let Some(token) = next_token(code) {
@@ -78,7 +79,9 @@ impl Program {
                 "}" => return tokens,
                 "loop" => match next_token(code).as_deref() {
                     Some("{") => {
-                        tokens.push(Token::Loop(Self::parse_code_segment(code, functions)));
+                        tokens.push(Token::LoopBlock(Self::parse_code_segment(
+                            code, functions, lets,
+                        )));
                     }
                     Some(token) => {
                         panic!("unsupported symbol: {}", token);
@@ -89,7 +92,9 @@ impl Program {
                 },
                 "if" => match next_token(code).as_deref() {
                     Some("{") => {
-                        tokens.push(Token::If(Self::parse_code_segment(code, functions)));
+                        tokens.push(Token::IfBlock(Self::parse_code_segment(
+                            code, functions, lets,
+                        )));
                     }
                     Some(token) => {
                         panic!("unsupported symbol: {}", token);
@@ -105,16 +110,32 @@ impl Program {
                 "???" => tokens.push(Token::Debug),
                 "load_byte" => tokens.push(Token::Memory(MemoryOperation::LoadByte)),
                 "clear" => tokens.push(Token::Memory(MemoryOperation::ClearMemory)),
+                "let" => {
+                    let mut new_lets = lets.clone();
+                    while let Some(token) = next_token(code) {
+                        if token == "{" {
+                            tokens.push(Token::LetBlock(
+                                Self::parse_code_segment(code, functions, &new_lets),
+                                new_lets,
+                            ));
+                            break;
+                        } else {
+                            new_lets.push(token);
+                        }
+                    }
+                }
 
                 token => {
-                    if token.starts_with('"') && token.ends_with('"') {
+                    if let Ok(value) = token.parse::<usize>() {
+                        tokens.push(Token::Push(value));
+                    } else if token.starts_with('"') && token.ends_with('"') {
                         let mut data = token[1..token.len() - 1].as_bytes().to_vec();
                         data.push(0);
                         tokens.push(Token::Memory(MemoryOperation::PushBytes(data)));
-                    } else if let Ok(value) = token.parse::<usize>() {
-                        tokens.push(Token::Push(value));
                     } else if let Some(_function) = functions.get(token) {
                         tokens.push(Token::FunctionCall(token.to_string()));
+                    } else if lets.contains(&token.to_string()) {
+                        tokens.push(Token::Let(token.to_string()))
                     } else {
                         panic!("Unknown token: {}", token);
                     }
@@ -133,6 +154,7 @@ impl Program {
             main,
             &mut Vec::with_capacity(1000),
             &mut Memory::new(),
+            &HashMap::new(),
             &mut InterpretationStatus::None,
         )
     }
@@ -142,6 +164,7 @@ impl Program {
         segment: &[Token],
         stack: &mut Vec<usize>,
         memory: &mut Memory,
+        variables: &HashMap<String, usize>,
         status: &mut InterpretationStatus,
     ) {
         for token in segment {
@@ -220,17 +243,17 @@ impl Program {
                 Token::Debug => {
                     println!("{:?} {:?}", stack, memory);
                 }
-                Token::If(segment) => {
+                Token::IfBlock(segment) => {
                     if stack.pop().unwrap() != 0 {
-                        self.interpret_segment(segment, stack, memory, status);
+                        self.interpret_segment(segment, stack, memory, variables, status);
                         match status {
                             InterpretationStatus::None => {}
                             _ => return,
                         }
                     }
                 }
-                Token::Loop(segment) => loop {
-                    self.interpret_segment(segment, stack, memory, status);
+                Token::LoopBlock(segment) => loop {
+                    self.interpret_segment(segment, stack, memory, variables, status);
                     match status {
                         InterpretationStatus::Continue => {
                             *status = InterpretationStatus::None;
@@ -259,8 +282,24 @@ impl Program {
                         .expect("no function with this name found"),
                     stack,
                     memory,
+                    variables,
                     status,
                 ),
+                Token::LetBlock(segment, let_bindings) => {
+                    let mut new_variables = variables.clone();
+                    for let_binding in let_bindings {
+                        new_variables.insert(let_binding.clone(), stack.pop().unwrap());
+                    }
+                    self.interpret_segment(segment, stack, memory, &new_variables, status);
+                    match status {
+                        InterpretationStatus::None => {}
+                        _ => return,
+                    }
+                }
+                Token::Let(let_binding) => {
+                    let value = variables.get(let_binding).unwrap();
+                    stack.push(*value);
+                }
 
                 // TODO:remove this unreachable arm after most tokens are filled int
                 token => {
