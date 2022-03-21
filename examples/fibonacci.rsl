@@ -29,7 +29,7 @@ fn fibonacci {
             break
         }
         putu
-        ", " dup print clear
+        ", " dup print free
         
     }
 }

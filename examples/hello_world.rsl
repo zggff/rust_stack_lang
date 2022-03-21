@@ -18,7 +18,7 @@ fn print {
 }
 
 fn main {
-    "Hello World!" dup print clear
+    "Hello World!" dup print free
     10 putc 
     ??? // debug stack and memory
 }

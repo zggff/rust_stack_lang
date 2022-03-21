@@ -109,7 +109,7 @@ impl Program {
                 "putu" => tokens.push(Token::Putu),
                 "???" => tokens.push(Token::Debug),
                 "load_byte" => tokens.push(Token::Memory(MemoryOperation::LoadByte)),
-                "clear" => tokens.push(Token::Memory(MemoryOperation::ClearMemory)),
+                "free" => tokens.push(Token::Memory(MemoryOperation::Free)),
                 "let" => {
                     let mut new_lets = lets.clone();
                     while let Some(token) = next_token(code) {
@@ -225,7 +225,7 @@ impl Program {
                         let value = memory.get(address).unwrap();
                         stack.push(*value as usize);
                     }
-                    MemoryOperation::ClearMemory => {
+                    MemoryOperation::Free => {
                         let len = stack.pop().unwrap();
                         let address = stack.pop().unwrap();
                         memory.remove(address, len);

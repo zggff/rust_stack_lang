@@ -26,7 +26,7 @@ pub enum MemoryOperation {
     PushBytes(Vec<u8>), // pushes a sequence of bytes into local memory, returning the address,
     ChangeByte,         // takes the address from the stack and modifies the location in memory,
     LoadByte,
-    ClearMemory, // takes the address and count from the stack and clears local memory
+    Free, // takes the address and count from the stack and clears local memory
 }
 
 #[derive(Debug)]
