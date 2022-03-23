@@ -1,25 +1,19 @@
 // consumes the pointer to the start of the string
 // return the number of bytes written
 fn print {
-    dup
-    loop {
-        // duplicate the pointer to current char
-        dup 
-        // load byte from memory
-        load_byte 
-        dup 0 = if {
-            drop
-            1 + -
-            break
-        }
-        putc
-        1 +
+    let address {
+        0 while { dup address + load_byte dup 0 > } {
+                putc
+                1 +
+            }   
+        drop address swap
+        1 + // account for null termination
     }
 }
 
+
 fn main {
-    "Hello World!" dup print free
-    10 putc 
-    ??? // debug stack and memory
+    "Hello World!" print free
+    ???
 }
 

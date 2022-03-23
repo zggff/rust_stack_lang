@@ -40,7 +40,10 @@ pub enum Token {
 
     // TODO: review control flow for the language
     IfBlock(Vec<Token>, Vec<Token>), // if statement, consuming boolean value from stack
-    LoopBlock(Vec<Token>),           // infinite loop. To exit loop use break
+    // TODO: deprecate loop in favour of while 1
+    LoopBlock(Vec<Token>), // infinite loop. To exit loop use break
+
+    WhileBlock(Vec<Token>, Vec<Token>), // first is the condition, the second is the body of the loop
     Continue,
     Break,                             // exit the loop
     LetBlock(Vec<Token>, Vec<String>), // scope for the let bindings,

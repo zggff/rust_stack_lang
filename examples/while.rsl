@@ -1,0 +1,6 @@
+fn main {
+    0 while { dup 10 < } {
+        dup putu
+        1 +
+    }
+}

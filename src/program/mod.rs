@@ -123,16 +123,27 @@ impl Program {
                 "load_byte" => tokens.push(Token::Memory(MemoryOperation::LoadByte)),
                 "free" => tokens.push(Token::Memory(MemoryOperation::Free)),
                 "let" => {
+                    let mut let_bindings = Vec::new();
                     let mut new_lets = lets.clone();
                     while let Some(token) = code.next() {
                         if token == "{" {
+                            new_lets.extend(let_bindings.clone());
                             tokens.push(Token::LetBlock(
                                 Self::parse_code_segment(code, functions, &new_lets),
-                                new_lets,
+                                let_bindings,
                             ));
                             break;
                         } else {
-                            new_lets.push(token);
+                            let_bindings.push(token);
+                        }
+                    }
+                }
+                "while" => {
+                    if let Some("{") = code.next().as_deref() {
+                        let condition = Self::parse_code_segment(code, functions, lets);
+                        if let Some("{") = code.next().as_deref() {
+                            let loop_body = Self::parse_code_segment(code, functions, lets);
+                            tokens.push(Token::WhileBlock(condition, loop_body));
                         }
                     }
                 }
@@ -187,8 +198,8 @@ impl Program {
                     stack.push(*value);
                 }
                 Token::Math(operand) => {
-                    let a = stack.pop().unwrap();
                     let b = stack.pop().unwrap();
+                    let a = stack.pop().unwrap();
                     let result = match operand {
                         MathOperator::Add => a + b,
                         MathOperator::Sub => a - b,
@@ -196,8 +207,8 @@ impl Program {
                     stack.push(result);
                 }
                 Token::Cmp(operand) => {
-                    let a = stack.pop().unwrap();
                     let b = stack.pop().unwrap();
+                    let a = stack.pop().unwrap();
                     let result = match operand {
                         CmpOperator::Less => a < b,
                         CmpOperator::Greater => a > b,
@@ -275,6 +286,25 @@ impl Program {
                     }
                 }
                 Token::LoopBlock(segment) => loop {
+                    self.interpret_segment(segment, stack, memory, variables, status, io);
+                    match status {
+                        InterpretationStatus::Continue => {
+                            *status = InterpretationStatus::None;
+                            continue;
+                        }
+                        InterpretationStatus::Break => {
+                            *status = InterpretationStatus::None;
+                            break;
+                        }
+                        _ => {}
+                    }
+                },
+                Token::WhileBlock(condition, segment) => loop {
+                    self.interpret_segment(condition, stack, memory, variables, status, io);
+                    if stack.pop().unwrap() == 0 {
+                        break;
+                    }
+
                     self.interpret_segment(segment, stack, memory, variables, status, io);
                     match status {
                         InterpretationStatus::Continue => {
