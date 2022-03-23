@@ -1,6 +1,6 @@
 use crate::io::Io;
 use crate::token::*;
-use std::{collections::HashMap, io::Write, iter::Peekable};
+use std::{collections::HashMap, io::Write, iter::Peekable, mem};
 
 mod memory;
 use memory::Memory;
@@ -120,7 +120,9 @@ impl Program {
                 "putc" => tokens.push(Token::Putc),
                 "putu" => tokens.push(Token::Putu),
                 "???" => tokens.push(Token::Debug),
-                "load_byte" => tokens.push(Token::Memory(MemoryOperation::LoadByte)),
+                "<-" => tokens.push(Token::Memory(MemoryOperation::LoadByte)),
+                "->" => tokens.push(Token::Memory(MemoryOperation::StoreByte)),
+                "alloc" => tokens.push(Token::Memory(MemoryOperation::Alloc)),
                 "free" => tokens.push(Token::Memory(MemoryOperation::Free)),
                 "let" => {
                     let mut let_bindings = Vec::new();
@@ -250,10 +252,20 @@ impl Program {
                         let value = memory.get(address).unwrap();
                         stack.push(*value as usize);
                     }
+                    MemoryOperation::StoreByte => {
+                        let value = stack.pop().unwrap();
+                        let address = stack.pop().unwrap();
+                        memory.set(address, value as u8);
+                    }
                     MemoryOperation::Free => {
                         let len = stack.pop().unwrap();
                         let address = stack.pop().unwrap();
                         memory.remove(address, len);
+                    }
+                    MemoryOperation::Alloc => {
+                        let len = stack.pop().unwrap();
+                        let address = memory.alloc(len);
+                        stack.push(address);
                     }
                     _ => {}
                 },

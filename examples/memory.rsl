@@ -1,0 +1,10 @@
+fn main {
+    2 alloc
+    let address {
+        // allocates 2 bytes returning the address of the first one
+        address 6 ->
+        address 1 + 9 ->
+        address <- putu
+        address 1 + <- putu
+    }
+}

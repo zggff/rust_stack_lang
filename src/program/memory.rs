@@ -1,3 +1,5 @@
+use std::fmt::Debug;
+
 #[derive(Debug)]
 pub struct Memory {
     memory: Vec<u8>,
@@ -45,12 +47,35 @@ impl Memory {
         }
         starting_address
     }
+    pub fn alloc(&mut self, len: usize) -> usize {
+        let index = self
+            .free
+            .iter()
+            .position(|&(_address, free)| free as usize >= len)
+            .unwrap();
+        let (address, remaining) = self.free.get_mut(index).unwrap();
+        let starting_address = *address;
+        self.memory
+            .resize(self.memory.len().max(*address as usize + len), 0); // extend memory;
+        *remaining -= len;
+
+        if *remaining == 0 {
+            self.free.remove(0);
+        }
+        starting_address
+    }
     #[inline]
     pub fn get(&self, index: usize) -> Option<&u8> {
         self.memory.get(index)
     }
 
+    #[inline]
+    pub fn set(&mut self, index: usize, value: u8) {
+        *self.memory.get_mut(index).unwrap() = value;
+    }
+
     pub fn remove(&mut self, address: usize, len: usize) {
+        // NOTE: maybe there is no need to reset the memory to zeros
         for i in 0..len {
             self.memory[(address + i) as usize] = 0;
         }
@@ -110,4 +135,9 @@ fn test_memory() {
     memory.remove(0, memory.memory.len());
     assert_eq!(memory.memory, vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
     assert_eq!(memory.free, vec![(0, usize::MAX)]);
+
+    let mut memory = Memory::new();
+    memory.alloc(5);
+    assert_eq!(memory.memory, vec![0, 0, 0, 0, 0]);
+    assert_eq!(memory.free, vec![(0, usize::MAX - 5)]);
 }

@@ -20,13 +20,16 @@ pub enum StackOperation {
     Drop,
 }
 
+// <- to load variable
+// -> to store variable
 #[derive(Debug)]
 pub enum MemoryOperation {
-    PushByte,           // pushes single byte into the local memory, returning the address,
+    // PushByte,           // pushes single byte into the local memory, returning the address,
     PushBytes(Vec<u8>), // pushes a sequence of bytes into local memory, returning the address,
-    ChangeByte,         // takes the address from the stack and modifies the location in memory,
+    StoreByte,          // takes the address from the stack and modifies the location in memory,
     LoadByte,
     Free, // takes the address and count from the stack and clears local memory
+    Alloc,
 }
 
 #[derive(Debug)]

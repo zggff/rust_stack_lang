@@ -2,7 +2,7 @@
 // return the number of bytes written
 fn print {
     let address {
-        0 while { dup address + load_byte dup 0 > } {
+        0 while { dup address + <- dup 0 > } {
                 putc
                 1 +
             }   
