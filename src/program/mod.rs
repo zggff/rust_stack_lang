@@ -60,6 +60,7 @@ impl Program {
                 // math operations
                 "+" => tokens.push(Token::Math(MathOperator::Add)),
                 "-" => tokens.push(Token::Math(MathOperator::Sub)),
+                "*" => tokens.push(Token::Math(MathOperator::Mul)),
 
                 // boolean operations
                 "<" => tokens.push(Token::Cmp(CmpOperator::Less)),
@@ -205,6 +206,7 @@ impl Program {
                     let result = match operand {
                         MathOperator::Add => a + b,
                         MathOperator::Sub => a - b,
+                        MathOperator::Mul => a * b,
                     };
                     stack.push(result);
                 }

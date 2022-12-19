@@ -2,6 +2,7 @@
 pub enum MathOperator {
     Add,
     Sub,
+    Mul,
 }
 
 #[derive(Debug)]
