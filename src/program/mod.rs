@@ -31,7 +31,7 @@ impl Program {
                             functions.insert(function_name, function);
                         }
                         Some(token) => {
-                            panic!("unsupported symbol: {}, '{{' expected", token);
+                            panic!("unsupported symbol: {token}, '{{' expected");
                         }
                         None => {
                             panic!("unexpected end of file");
@@ -40,7 +40,7 @@ impl Program {
                 }
 
                 symbol => {
-                    panic!("umrecognised symbol on top level of program: {}; Expected one of the following values: [fn]", symbol)
+                    panic!("umrecognised symbol on top level of program: {symbol}; Expected one of the following values: [fn]")
                 }
             };
         }
@@ -85,7 +85,7 @@ impl Program {
                         )));
                     }
                     Some(token) => {
-                        panic!("unsupported symbol: {}, '{{' expected", token);
+                        panic!("unsupported symbol: {token}, '{{' expected",);
                     }
                     None => {
                         panic!("unexpected end of file");
@@ -98,7 +98,7 @@ impl Program {
                             match code.next().as_deref() {
                                 Some("{") => Self::parse_code_segment(code, functions, lets),
                                 Some(token) => {
-                                    panic!("unsupported symbol: {}, '{{' expected", token);
+                                    panic!("unsupported symbol: {token}, '{{' expected");
                                 }
                                 None => {
                                     panic!("unexpected end of file");
@@ -110,7 +110,7 @@ impl Program {
                         tokens.push(Token::IfBlock(true_block, false_block));
                     }
                     Some(token) => {
-                        panic!("unsupported symbol: {}, '{{' expected", token);
+                        panic!("unsupported symbol: {token}, '{{' expected",);
                     }
                     None => {
                         panic!("unexpected end of file");
@@ -163,7 +163,7 @@ impl Program {
                     } else if lets.contains(&token.to_string()) {
                         tokens.push(Token::Let(token.to_string()))
                     } else {
-                        panic!("Unknown token: {}", token);
+                        panic!("Unknown token: {token}",);
                     }
                 }
             }
@@ -269,7 +269,6 @@ impl Program {
                         let address = memory.alloc(len);
                         stack.push(address);
                     }
-                    _ => {}
                 },
                 Token::Putc => {
                     write!(
@@ -285,7 +284,7 @@ impl Program {
                     std::io::stdout().flush().unwrap();
                 }
                 Token::Debug => {
-                    writeln!(io, "{:?} {:?}", stack, memory).unwrap();
+                    writeln!(io, "{stack:?} {memory:?}").unwrap();
                 }
                 Token::IfBlock(true_block, false_block) => {
                     let segment = if stack.pop().unwrap() != 0 {
@@ -366,11 +365,6 @@ impl Program {
                 Token::Let(let_binding) => {
                     let value = variables.get(let_binding).unwrap();
                     stack.push(*value);
-                }
-
-                // TODO:remove this unreachable arm after most tokens are filled int
-                token => {
-                    unimplemented!("{:?}", token)
                 }
             }
         }

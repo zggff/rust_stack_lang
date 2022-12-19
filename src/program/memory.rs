@@ -16,9 +16,8 @@ impl Memory {
     pub fn push(&mut self, value: u8) -> usize {
         let (address, remaining) = self.free.get_mut(0).unwrap();
         let starting_address = *address;
-        self.memory
-            .resize(self.memory.len().max(*address as usize + 1), 0); // extend memory;
-        self.memory[*address as usize] = value;
+        self.memory.resize(self.memory.len().max(*address + 1), 0); // extend memory;
+        self.memory[*address] = value;
         *address += 1;
         *remaining -= 1;
         if *remaining == 0 {
@@ -30,16 +29,16 @@ impl Memory {
         let index = self
             .free
             .iter()
-            .position(|&(_address, free)| free as usize >= data.len())
+            .position(|&(_address, free)| free >= data.len())
             .unwrap();
         let (address, remaining) = self.free.get_mut(index).unwrap();
         let starting_address = *address;
         self.memory
-            .resize(self.memory.len().max(*address as usize + data.len()), 0); // extend memory;
+            .resize(self.memory.len().max(*address + data.len()), 0); // extend memory;
         *remaining -= data.len();
 
         for value in data {
-            self.memory[*address as usize] = *value;
+            self.memory[*address] = *value;
             *address += 1;
         }
         if *remaining == 0 {
@@ -51,12 +50,11 @@ impl Memory {
         let index = self
             .free
             .iter()
-            .position(|&(_address, free)| free as usize >= len)
+            .position(|&(_address, free)| free >= len)
             .unwrap();
         let (address, remaining) = self.free.get_mut(index).unwrap();
         let starting_address = *address;
-        self.memory
-            .resize(self.memory.len().max(*address as usize + len), 0); // extend memory;
+        self.memory.resize(self.memory.len().max(*address + len), 0); // extend memory;
         *remaining -= len;
 
         if *remaining == 0 {
@@ -77,12 +75,12 @@ impl Memory {
     pub fn remove(&mut self, address: usize, len: usize) {
         // NOTE: maybe there is no need to reset the memory to zeros
         for i in 0..len {
-            self.memory[(address + i) as usize] = 0;
+            self.memory[(address + i)] = 0;
         }
         self.free.push((address, len));
 
         self.free.sort_unstable();
-        let mut new_free = vec![*self.free.get(0).unwrap()];
+        let mut new_free = vec![*self.free.first().unwrap()];
         for (address, remaining) in self.free[1..].iter() {
             let (last_address, last_remaining) = new_free.last_mut().unwrap();
             if *address == *last_address + *last_remaining {
