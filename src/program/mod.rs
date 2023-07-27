@@ -1,6 +1,6 @@
 use crate::io::Io;
 use crate::token::*;
-use std::{collections::HashMap, io::Write, iter::Peekable, mem};
+use std::{collections::HashMap, io::Write, iter::Peekable};
 
 mod memory;
 use memory::Memory;
@@ -388,7 +388,7 @@ impl<'a> Iterator for Tokens<'a> {
         let mut accumulator = String::new();
         let mut last_char = ' ';
         let mut is_comment = false;
-        let separators = vec![' ', '\n', '\t'];
+        let separators = [' ', '\n', '\t'];
 
         while let Some(char) = self.code.next() {
             match char {
@@ -425,84 +425,48 @@ impl<'a> Iterator for Tokens<'a> {
     }
 }
 
-fn next_token(chars: &mut impl Iterator<Item = char>) -> Option<String> {
-    let mut accumulator = String::new();
-    let mut last_char = ' ';
-    let mut is_comment = false;
-    let separators = vec![' ', '\n', '\t'];
-
-    while let Some(char) = chars.next() {
-        match char {
-            '\n' if is_comment => is_comment = false,
-            // this allows not to check for comments in the parsing function, as it consumes the iterator until the next buffer
-            '/' if last_char == '/' => {
-                accumulator.pop();
-                is_comment = true
-            }
-            '"' if !is_comment => {
-                accumulator.push('"');
-                for char in chars.by_ref() {
-                    accumulator.push(char);
-                    if char == '"' {
-                        return Some(accumulator);
-                    }
-                }
-            }
-            // WARNING: current next_token fails to parse code like: "fn main{}"; whitespace is required
-            char if separators.contains(&char) => {
-                if !is_comment && !accumulator.is_empty() {
-                    return Some(accumulator);
-                }
-            }
-
-            char if !is_comment => {
-                last_char = char;
-                accumulator.push(char)
-            }
-            _ => {}
-        }
-    }
-    None
-}
-
-#[test]
-fn test_next_token() {
-    let string = r#"
+#[cfg(test)]
+mod tests {
+    use super::{Tokens, Program, Io};
+    #[test]
+    fn test_next_token() {
+        let string = r#"
         //test
         fn main {
             hello
             "test string"
         }
     "#;
-    let code = &mut Tokens::new(string);
-    assert_eq!(code.next(), Some(String::from("fn")));
-    assert_eq!(code.next(), Some(String::from("main")));
-    assert_eq!(code.next(), Some(String::from("{")));
-    assert_eq!(code.next(), Some(String::from("hello")));
-    assert_eq!(code.next(), Some(String::from("\"test string\"")));
-    assert_eq!(code.next(), Some(String::from("}")));
-    assert_eq!(code.next(), None);
-}
+        let code = &mut Tokens::new(string);
+        assert_eq!(code.next(), Some(String::from("fn")));
+        assert_eq!(code.next(), Some(String::from("main")));
+        assert_eq!(code.next(), Some(String::from("{")));
+        assert_eq!(code.next(), Some(String::from("hello")));
+        assert_eq!(code.next(), Some(String::from("\"test string\"")));
+        assert_eq!(code.next(), Some(String::from("}")));
+        assert_eq!(code.next(), None);
+    }
 
-macro_rules! test_program_output {
-    ($code: expr, $output: expr) => {{
-        let program = Program::parse($code);
-        let mut writer = vec![];
-        let mut io = Io::new(&mut writer);
-        program.interpret(&mut io);
-        assert_eq!(writer, $output);
-    }};
-}
+    macro_rules! test_program_output {
+        ($code: expr, $output: expr) => {{
+            let program = Program::parse($code);
+            let mut writer = vec![];
+            let mut io = Io::new(&mut writer);
+            program.interpret(&mut io);
+            assert_eq!(writer, $output);
+        }};
+    }
 
-#[test]
-fn test_interpreter() {
-    test_program_output!(
-        r#"
+    #[test]
+    fn test_interpreter() {
+        test_program_output!(
+            r#"
         fn main {
             69 putu
             10 putc
         }
         "#,
-        "69\n".as_bytes()
-    );
+            "69\n".as_bytes()
+        );
+    }
 }
