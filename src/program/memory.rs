@@ -1,5 +1,8 @@
 use std::fmt::Debug;
 
+static FREE_MEMORY: usize = 2_usize.pow(32);
+
+
 #[derive(Debug)]
 pub struct Memory {
     memory: Vec<u8>,
@@ -10,7 +13,7 @@ impl Memory {
     pub fn new() -> Self {
         Self {
             memory: Vec::new(),
-            free: vec![(0, 2_usize.pow(32))],
+            free: vec![(0, FREE_MEMORY)],
         }
     }
     pub fn extend(&mut self, data: &[u8]) -> usize {
@@ -85,7 +88,7 @@ impl Memory {
 fn test_memory() {
     let mut memory = Memory::new();
     assert_eq!(memory.memory, vec![]);
-    assert_eq!(memory.free, vec![(0, usize::MAX)]);
+    assert_eq!(memory.free, vec![(0, FREE_MEMORY)]);
     let address = memory.extend(&[1, 1, 1, 1]);
     assert_eq!(address, 0);
     let address = memory.extend(&[2, 2, 2]);
@@ -93,37 +96,37 @@ fn test_memory() {
     let address = memory.extend(&[3]);
     assert_eq!(address, 7);
     assert_eq!(memory.memory, vec![1, 1, 1, 1, 2, 2, 2, 3]);
-    assert_eq!(memory.free, vec![(8, usize::MAX - 8)]);
+    assert_eq!(memory.free, vec![(8, FREE_MEMORY - 8)]);
     memory.remove(1, 4);
     assert_eq!(memory.memory, vec![1, 0, 0, 0, 0, 2, 2, 3]);
-    assert_eq!(memory.free, vec![(1, 4), (8, usize::MAX - 8)]);
+    assert_eq!(memory.free, vec![(1, 4), (8, FREE_MEMORY - 8)]);
     let address = memory.extend(&[4]);
     assert_eq!(address, 1);
     assert_eq!(memory.memory, vec![1, 4, 0, 0, 0, 2, 2, 3]);
-    assert_eq!(memory.free, vec![(2, 3), (8, usize::MAX - 8)]);
+    assert_eq!(memory.free, vec![(2, 3), (8, FREE_MEMORY - 8)]);
     let address = memory.extend(&[5]);
     assert_eq!(address, 2);
     assert_eq!(memory.memory, vec![1, 4, 5, 0, 0, 2, 2, 3]);
-    assert_eq!(memory.free, vec![(3, 2), (8, usize::MAX - 8)]);
+    assert_eq!(memory.free, vec![(3, 2), (8, FREE_MEMORY - 8)]);
     let address = memory.extend(&[6, 6, 6]);
     assert_eq!(address, 8);
     assert_eq!(memory.memory, vec![1, 4, 5, 0, 0, 2, 2, 3, 6, 6, 6]);
-    assert_eq!(memory.free, vec![(3, 2), (11, usize::MAX - 11)]);
+    assert_eq!(memory.free, vec![(3, 2), (11, FREE_MEMORY - 11)]);
     let address = memory.extend(&[7, 7]);
     assert_eq!(address, 3);
     assert_eq!(memory.memory, vec![1, 4, 5, 7, 7, 2, 2, 3, 6, 6, 6]);
-    assert_eq!(memory.free, vec![(11, usize::MAX - 11)]);
+    assert_eq!(memory.free, vec![(11, FREE_MEMORY - 11)]);
     memory.remove(4, 1);
     let address = memory.extend(&[8]);
     assert_eq!(address, 4);
     assert_eq!(memory.memory, vec![1, 4, 5, 7, 8, 2, 2, 3, 6, 6, 6]);
-    assert_eq!(memory.free, vec![(11, usize::MAX - 11)]);
+    assert_eq!(memory.free, vec![(11, FREE_MEMORY - 11)]);
     memory.remove(0, memory.memory.len());
     assert_eq!(memory.memory, vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
-    assert_eq!(memory.free, vec![(0, usize::MAX)]);
+    assert_eq!(memory.free, vec![(0, FREE_MEMORY)]);
 
     let mut memory = Memory::new();
     memory.alloc(5);
     assert_eq!(memory.memory, vec![0, 0, 0, 0, 0]);
-    assert_eq!(memory.free, vec![(0, usize::MAX - 5)]);
+    assert_eq!(memory.free, vec![(0, FREE_MEMORY - 5)]);
 }
